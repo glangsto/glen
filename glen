@@ -1,0 +1,7 @@
+#!/bin/bash
+# GBT Line Emission Navigator
+# HISTORY
+# 26Feb22 GIL initial bash wrapper to a python to stack molecular lines
+
+#
+python glen.py "$@"
