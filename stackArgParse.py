@@ -8,27 +8,34 @@ import argparse
 import textwrap
 
 epilogText = textwrap.dedent('''
-This program is intented for use in comparing moleculedetections, based on FITS tables of 
-multiple molecular line observations of spectral intensity versus frequency.   
+This program is intented for use in comparing molecule detections, based on 
+FITS tables of multiple molecular line observations of spectral intensity 
+versus frequency.   
 
 The GOTHAM Spectral Pipeline data are available online at:
     https://greenbankobservatory.org/portal/gbt/gbt-legacy-archive/gotham-data/
-Download the calibrated data.
+References are there. Download the calibrated data.
 
 The Turner and Langston Q band Survey of TMC-1 and searches for '$HC_{13}N$' are
-in preparation, once the spectral comparision is complete.
+in preparation, once the spectral comparision is complete.   These
+data will also be downloadable.
 
 See Langston and Turner (2007) for a first example of successful molecular 
 line stacking to detect previously un-detected molecular species. 
+
 Article: "Detection of C Isotopomers of the Molecule HC_7N" 
 (Langston, G., & Turner, B., 2007, The Astrophysical Journal, 658, 455).
 
-Line summing code crafted by Glen Langstion, 2026 February 20
+Example:
+ ./glen -i pro/hc5n.pro --molecule '$HC_{5}N$' --plot 'sum'
+
+Line summing code crafted by Glen Langstion, 2026 February 23
 '''
                              )
 # parse the extensive argument list for stacking spectra
 def stackArgParse():
     parser = argparse.ArgumentParser(
+
         description="Process molecular spectra from one or more data files.   Spectral lines are summed in velocity space, using modeled weighted averages.",
         epilog=epilogText,
         formatter_class=argparse.RawDescriptionHelpFormatter
