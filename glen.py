@@ -28,18 +28,23 @@ from parselist import *
 from stackArgParse import *
 
 def getObservationFile():
-"""
-getObservationFile() will try to find the (large) observation file.
-If the file is not found, then the program will try to download it
-to the current directory.
-"""
+    """
+    getObservationFile() will try to find the (large) observation file.
+    If the file is not found, then the program will try to download it
+    to the current directory.
+    """
     # first see if the file is in the current directroy
     testFile='./gotham_drv.fits'
     if os.path.exists(testFile):
         spectraFile = testFile
     else:
-        # else see if the file file was downloaded
-        testFile='~/Downloads/gotham_drv.fits'
+        from pathlib import Path
+
+        testFile = str(Path.home()) + "/Downloads/gotham_drv.fits"
+        print("TestFile: %s" % (testFile))
+        # save the download file, in case the  next step does not work
+        downloadFile = testFile
+# else see if the file file was downloaded
         if os.path.exists(testFile):
             spectraFile = testFile
         else:
@@ -52,22 +57,18 @@ to the current directory.
                 import subprocess
                 webFile = "https://www.gb.nrao.edu/GbtLegacyArchive/GOTHAM/calibrated/gotham_drv.fits"
                 print("No Gotham file yet found!")
-                print("Wget-ting %s", webFile)
+                print("Wget-ting %s" % ( webFile))
                 print("This may take a while...")
                 print("")
                 try:
-                    getCommand=["/bin/wget", webFile]
+#                    wgetArgs = "-O %s %s" % (downloadFile, webFile)
+                    getCommand=["/bin/wget", "-O", downloadFile, webFile]
                     result=subprocess.run( getCommand)
                 except:
                     print("Failed to get a spectra measurement file")
                     exit()
-                if result ==0:
-                    print("wget was successful, continuing")
-                    spectraFile="./gotham_drv.fits"
-                else:
-                    print("!!! Failed to get a spectra file, exiting !!!")
-                    print("!!!")
-                    exit()
+                print("wget was successful, continuing")
+                spectraFile=downloadFile
     return spectraFile
     # end of getObservationFile()
     
@@ -98,16 +99,16 @@ with open(args.intensity) as f:
 
 freqs, labels, weights = extract_idl_arrays(text)
 
-print("freqs  :", freqs)
-print("labels :", labels)
-print("weights:", weights)
+print("%3d freqs   1st: %.3f" % (len(freqs), freqs[0]))
+print("%3d labels  1st: %s" %  (len(labels), labels[0]))
+print("%3d weights 1st: %.3f" % (len(weights), weights[0]))
 f.close()
 
-molecule = args.molecule
+molecule= args.molecule
 # if no user supplied molecue name
 if molecule == None:
     try:
-        # try to find specific molecule tag.
+        # try to find specific molecule tag from model.
         declared, funcs, referenced = parse_idl_file(args.intensity)
         iPlot = declared.index('plotTitle')
         moleculeIdl = referenced[iPlot]
@@ -128,9 +129,11 @@ except Exception as e:
     print(f"An error occurred while reading the FITS file: {e}")
     exit()
 
-print(table.meta)
-print(table.columns)
-print(table.columns['frequency'].unit)
+try:
+    print("Object: %s" % (table.meta['OBJECT']))
+except:
+    print("Object Name not found")
+#print(table.columns['frequency'].unit)
 xaxis=table.columns['frequency'].unit
 yaxis=table.columns['Tmb'].unit
     
