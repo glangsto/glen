@@ -2,6 +2,7 @@
 #This module plots stacked versions of molecular lines
 #based on Gotham and other GBT Spectra 
 #HISTORY
+#26Feb23 GIL check for astropy before import
 #26Feb21 GIL add more command line arguments
 #26Feb20 GIL use parsearg and take many input parameters
 #26Feb16 GIL reduce default velocity grid
@@ -11,7 +12,14 @@
 import sys
 import os
 import matplotlib.pyplot as plt
-from astropy.table import Table
+try:
+    from astropy.table import Table
+except:
+    print("'astropy' must be installed first!")
+    print("try:")
+    print("sudo apt-get install python3-astropy")
+    print("")
+    exit()
 import numpy as np
 from stackSumVelocity import *
 from idl2mathtext import *
@@ -19,29 +27,34 @@ from getlists import *
 from parselist import *
 from stackArgParse import *
 
-# -1. Parse all the input arguments
-args = stackArgParse()
-
-spectraFile = ""
-# if no spectra files are found, try to find gotham, the default
-if args.data_files == None:
+def getObservationFile():
+"""
+getObservationFile() will try to find the (large) observation file.
+If the file is not found, then the program will try to download it
+to the current directory.
+"""
+    # first see if the file is in the current directroy
     testFile='./gotham_drv.fits'
     if os.path.exists(testFile):
         spectraFile = testFile
     else:
+        # else see if the file file was downloaded
         testFile='~/Downloads/gotham_drv.fits'
         if os.path.exists(testFile):
             spectraFile = testFile
         else:
+            # else maybe glangsto downloaded it (for GBO only)
             testFile='/users/glangsto/Downloads/gotham_drv.fits'
             if os.path.exists(testFile):
                 spectraFile = testFile
             else:
+                # else the file can be downloaded.
                 import subprocess
                 webFile = "https://www.gb.nrao.edu/GbtLegacyArchive/GOTHAM/calibrated/gotham_drv.fits"
-                print("No gotham file yet found!")
+                print("No Gotham file yet found!")
                 print("Wget-ting %s", webFile)
                 print("This may take a while...")
+                print("")
                 try:
                     getCommand=["/bin/wget", webFile]
                     result=subprocess.run( getCommand)
@@ -55,10 +68,20 @@ if args.data_files == None:
                     print("!!! Failed to get a spectra file, exiting !!!")
                     print("!!!")
                     exit()
-else:
-    spectraFile=args.data_files
+    return spectraFile
+    # end of getObservationFile()
+    
+# -1. Parse all the input arguments
+args = stackArgParse()
 
-print("Stacking spectral lines from observation file: %s" % (spectraFile))
+spectraFile = ""
+# if no spectra observation supplied, try to find Gotham obs, the default
+if args.data_files == None:
+    spectraFile = getObservationFile()
+else:
+    spectraFile = args.data_files
+
+print("Stacking spectral lines from Model file: %s" % (spectraFile))
 
 # 0. First read a line list
 # The line list is formated for use in idl.  This list will be converted
@@ -66,7 +89,7 @@ print("Stacking spectral lines from observation file: %s" % (spectraFile))
 
 if args.intensity == None:
     print("A model intensity file is needed")
-    args.intensity = "hc5n.pro"
+    args.intensity = "pro/hc5n.pro"
     print("Using model default: %s" % (args.intensity))
 
 print("Parsing Model Intensity File (IDL): %s" % (args.intensity))
