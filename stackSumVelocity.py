@@ -33,7 +33,7 @@ def stackSumVelocity(
         normalize=False,
         report_snr=True,
         velocity=None,
-        plot='both',
+        plot='both',   # options are 'both', 'stack' and 'sum'
         label=None,
         survey="GOTHAM",
         baseline=False):
@@ -222,8 +222,9 @@ def stackSumVelocity(
         plt.ylabel("Average Intensity", fontsize=14)
     else:
         plt.ylabel("Intensity + offset", fontsize=14)
+    # label for top of plot default
     if label == None:
-        plt.title("Stacked %s %s Spectra in Velocity Space" %
+        plt.title("Stack in Velocity %s with %s Spectra" %
                   (molecule, survey))
     else:
         plt.title(label)
