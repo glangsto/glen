@@ -159,13 +159,7 @@ except KeyError as e:
 for i, alabel in enumerate( labels):
     labels[i] = idl2mathtext( alabel)
 
-stackSumVelocity( x_array, y_array, freqs, labels,
-                  molecule, 
-                  vmin=args.vmin, vmax=args.vmax, dv=args.dv,
-                  offset=args.offset,
-                  weights=weights, normalize=False,
-                  velocity=args.velocity,
-                  plot=args.plot,
-                  baseline=args.baseline,
-                  survey=args.survey)
+# finally do all computations
+velocity, intensity = stackSumVelocity( x_array, y_array, freqs,
+                                           weights, labels, args)
 
