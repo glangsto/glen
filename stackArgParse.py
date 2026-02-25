@@ -1,5 +1,6 @@
 #python
 #HISTORY
+#26Feb23 GIL make ignoring confusing lines an option
 #26Feb21 GIL add dv and baseline options
 #26Feb20 GIL add usage and more options
 #26Feb18 GIL initial version
@@ -65,6 +66,13 @@ def stackArgParse():
 
     # Optional string argument
     parser.add_argument(
+        "--ignore",
+        type=str,
+        help="Ignore observations of confusing lines not in center of Sum Range"
+    )
+
+    # Optional string argument
+    parser.add_argument(
         "-f", "--frequency",
         type=str,
         help="Rest frequency of Molecule (MHz)"
@@ -93,10 +101,17 @@ def stackArgParse():
 
     # Optional string argument
     parser.add_argument(
+        "-n", "--normalize",
+        type=str,
+        help="Type of intensity normalization: none, peak or rms"
+    )
+
+    # Optional string argument
+    parser.add_argument(
         "-o", "--offset",
         type=str,
-        default = "0.25",
-        help="Intensity offset between plots (K),  Default = 0.25"
+        default = "0.5",
+        help="Intensity offset between plots (K),  Default = 0.5"
     )
 
     # Optional string argument
@@ -105,6 +120,13 @@ def stackArgParse():
         type=str,
         default='both',
         help="Type of plot: one of 'stack', 'sum' or 'both'. Default 'both'"
+    )
+
+    # Optionally report SNR of fit
+    parser.add_argument(
+        "--report-snr",
+        action='store_true',
+        help="Print summary of Fit to stacked line."
     )
 
     # Optional Survey Name 
@@ -161,9 +183,9 @@ def stackArgParse():
 
     # Example of another optional string
     parser.add_argument(
-        "--label",
+        "--title",
         type=str,
-        help="Optional label for output plots"
+        help="Optional title for top of output plots"
     )
 
     return parser.parse_args()
@@ -173,7 +195,7 @@ if __name__ == "__main__":
     args = stackArgParse()
     print("Molecule:", args.molecule)
     print("Data files:", args.data_files)
-    print("Label:", args.label)
+    print("Label:", args.title)
     print("Velocity:", args.velocity)
     if args.frequency != None:
         print("Frequency:", args.frequency)
