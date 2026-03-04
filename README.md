@@ -35,17 +35,14 @@ Modern molecular searches often rely on stacking multiple weak transitions to re
 
 ## Quick Start
 
-```python
-from glen import stackSumVelocity
+Using the spectral line stacking features are easy.   Below is an example for retrieving
+and stacking GBT observations of Taurus Molecular Cloud and discover the radio Spectrum of the
+cyanopolyene molecule HC5N.  The GOTHAM spectral line observations are downloaded on the first use
+and placed in your ~/Downloads Directory
 
-vel_grid, summed, fit_params = stackSumVelocity(
-    freq, intensity, rest_freqs,
-    vmin=0, vmax=12,
-    dv=0.05,
-    offset=0.3,
-    weights=[1, 0.9, 0.8, 0.7],
-    normalize="peak",
-    baseline_subtract=True,
-    fit_gaussian=True,
-    report_snr=True
-)
+- git clone https://www.github.com/glangsto/glen
+- cd glen
+- ./glen -m pro/hc5n.pro
+-  or
+- ./glen --help
+  
