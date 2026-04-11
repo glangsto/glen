@@ -2,6 +2,7 @@
 #This module plots stacked versions of molecular lines
 #based on Gotham and other GBT Spectra 
 #HISTORY
+#26Apr11 GIL use TMC Turner-Langston data by default
 #26Feb23 GIL check for astropy before import
 #26Feb21 GIL add more command line arguments
 #26Feb20 GIL use parsearg and take many input parameters
@@ -89,9 +90,9 @@ print("Stacking spectral lines from Model file: %s" % (spectraFile))
 # into a matplotlib friendly array
 
 if args.intensity == None:
-    print("A model intensity file is needed")
+    print("Model intensity file needed!! ")
     args.intensity = "pro/hc5n.pro"
-    print("Using model default: %s" % (args.intensity))
+    print("Default model intensity file: %s" % (args.intensity))
 
 print("Parsing Model Intensity File (IDL): %s" % (args.intensity))
 with open(args.intensity) as f:
@@ -112,8 +113,10 @@ if molecule == None:
         declared, funcs, referenced = parse_idl_file(args.intensity)
         iPlot = declared.index('plotTitle')
         moleculeIdl = referenced[iPlot]
-        molecule = idl2mathtext(moleculeIdl)
+        args.molecule = idl2mathtext(moleculeIdl)
     except:
+        moleculeIdl = "HC!D5!NN$"
+        args.molecule = "$HC_5N$"
         iPlot = 0
     
 # 1. Read the FITS file into an Astropy Table object
@@ -134,15 +137,41 @@ try:
 except:
     print("Object Name not found")
 #print(table.columns['frequency'].unit)
-xaxis=table.columns['frequency'].unit
-yaxis=table.columns['Tmb'].unit
+
+try:
+    findex = table.colnames.index("frequency")
+    fname  = "frequency"
+except:
+    try:
+        findex = table.colnames.index("FREQUENCY")
+        fname  = "FREQUENCY"
+    except:
+        #Frequency column not found assume 1nd column
+        findex = 0
+        fname = table.colnames[findex]
+
+# try to find T main beam column. 
+try:
+    tindex = table.colnames.index("Tmb")
+    tname = "Tmb"
+except:
+    try:
+        tindex = table.colnames.index("TMB")
+        tname = "TMB"
+    except:
+        #Temp column not found assume 2nd column
+        tindex = 1
+        tname = table.colnames[tindex]
+# now use indices to get column units
+xaxis=table.columns[fname].unit
+yaxis=table.columns[tname].unit
     
 # 2. Access the data columns
 # You can access columns by their names.
 # Replace 'column_name_x' and 'column_name_y' with the actual column names in your file.
 try:
-    x_data = table['frequency']
-    y_data = table['Tmb']
+    x_data = table[fname]
+    y_data = table[tname]
 
     # Convert to plain NumPy arrays if needed for specific plotting functions
     x_array = np.array(x_data)
@@ -153,6 +182,9 @@ except KeyError as e:
     print(f"Available columns are: {table.colnames}")
     exit()
 
+print("N Freqs: %5d  %.2f " % (len(x_array), x_array[0]))
+print("N Inten: %5d  %.2f " % (len(y_array), y_array[0]))
+          
 # now loop and stack velocities for multiople line lists
 
 # convert labels to matplot lib nice formats

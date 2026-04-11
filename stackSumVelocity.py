@@ -96,7 +96,7 @@ def stackSumVelocity(
     else:
         molecule = str( args.molecule)
     if args.survey == None:
-        args.survey = "GOTHAM",
+        args.survey = "Turner-Langston Q",
     else:
         args.survey = str( args.survey)
         
