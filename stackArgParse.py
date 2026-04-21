@@ -18,11 +18,10 @@ The GOTHAM Spectral Pipeline data are available online at:
 References are there. Download the calibrated data.
 
 The Turner and Langston Q band Survey of TMC-1 and searches for '$HC_{13}N$' are
-in preparation, once the spectral comparision is complete.   
-The observations are in the data sub-directory of this project.
-See: data/tmc-tlq.fits
+in preparation, once the spectral comparision is complete.   These
+data will also be downloadable.
 
-See Langston and Turner (2007) for the first example of successful molecular 
+See Langston and Turner (2007) for a first example of successful molecular 
 line stacking to detect previously un-detected molecular species. 
 
 Article: "Detection of C Isotopomers of the Molecule HC_7N" 
@@ -62,8 +61,8 @@ def stackArgParse():
         "-d", "--data-files",
         nargs="+",          # one or many
         type=str,
-        default="./data/tmc-tlq.fits",
-        help="Input files: Turner Langston Q band Survey and/or GOTHAM Survey"
+        default="tmc-tlq.fits gotham_drv.fits",
+        help="Input data files: will look in data directory, ie tmc-tql.fits"
     )
 
     # Optional string argument
@@ -78,6 +77,13 @@ def stackArgParse():
         "-f", "--frequency",
         type=str,
         help="Rest frequency of Molecule (MHz)"
+    )
+
+    # Optional string argument
+    parser.add_argument(
+        "-g", "--gauss",
+        action='store_true',
+        help="Fit Gaussians to Lines"
     )
 
     # Optional distance to source, for calculation of molecule mass
@@ -112,8 +118,8 @@ def stackArgParse():
     parser.add_argument(
         "-o", "--offset",
         type=str,
-        default = "0.5",
-        help="Intensity offset between plots (K),  Default = 0.5"
+        default = "0.25",
+        help="Intensity offset between plots (K),  Default = 0.25"
     )
 
     # Optional string argument
@@ -131,11 +137,11 @@ def stackArgParse():
         help="Print summary of Fit to stacked line."
     )
 
-    # Optional Survey Name 
+    # Optional Survey Name for label
     parser.add_argument(
         "-s", "--survey",
         type=str,
-        default="Turner-Langston Q",
+        default="TMC-TLQ GOTHAM",
         help="Spectral Observation Survey Name."
     )
 

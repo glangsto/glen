@@ -1,6 +1,9 @@
 #python
 #Function to stack in velocity the plots and sum the total.
 #HISTORY
+#26Apr11 GIL fit up to 3 gaussians to input individual spectra
+#26Feb26 GIL revised sums to use RMSs for optimum measurement
+#26Feb25 GIL take lists of arrays of observations and look for matches 
 #26Feb23 GIL just pass args structure, not individual items
 #26Feb21 GIL add median baseline 
 #26Feb20 GIL add fit labeling
@@ -12,6 +15,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from scipy.interpolate import interp1d
 from scipy.optimize import curve_fit
+from threefit import *
 
 C = 299792.458  # km/s
 
@@ -22,44 +26,9 @@ def freq_to_velocity(nu_obs, nu_rest):
     """Convert observed frequencies to velocities (radio definition)."""
     return C * (nu_rest - nu_obs) / nu_rest
 
-# the input arrays, freq_uency and intensity are large
-# Gotham Arrays, with irregular frequency samples.
-def stackSumVelocity(
-        freq, intensity, rest_freqs, weights, labels, args):
+def checkArgs( args):
+    """ Check the input arguments and update default values
     """
-    Convert spectra to velocity space for each rest frequency,
-    stack them visually, and compute a summed spectrum on a
-    uniform velocity grid.
-
-    Parameters
-    ----------
-    freq : array
-        Observed frequency array.
-    intensity : array
-        Observed intensity array.
-    rest_freqs : list
-        Molecular line rest frequencies.
-    labels : list
-        List of names of spectral lines
-    vmin, vmax : float
-        Velocity window (km/s).
-    dv : float
-        Desired velocity resolution for the summed spectrum.
-    offset : float
-        Vertical spacing for stacked plot.
-    weights : list or array, optional
-        Weight for each line (default = equal weights).
-
-    Returns
-    -------
-    vel_grid : array
-        Uniform velocity grid.
-    summed : array
-        Summed intensity on the uniform grid.
-    """
-
-    n_lines = len(rest_freqs)
-
     # first check arguments
     if args.vmin == None:
         args.vmin = 0.0
@@ -79,7 +48,6 @@ def stackSumVelocity(
         args.offset = 0.5,
     else:
         args.offset = float (args.offset)
-    offset = args.offset
     
     if args.normalize == None:
         args.normalize=False
@@ -87,7 +55,7 @@ def stackSumVelocity(
         args.report_snr = False
 
     if args.plot == None:
-        args.plot='both'   # options are 'both', 'stack' and 'sum'
+        args.plot='both'   # options are 'both', 'stack', 'freq' and 'sum'
     else:
         args.plot = args.plot.lower()
 
@@ -96,7 +64,7 @@ def stackSumVelocity(
     else:
         molecule = str( args.molecule)
     if args.survey == None:
-        args.survey = "Turner-Langston Q",
+        args.survey = "GOTHAM",
     else:
         args.survey = str( args.survey)
         
@@ -104,7 +72,48 @@ def stackSumVelocity(
         args.baseline = False
     else:
         args.baseline = bool( args.baseline)
-        
+
+    # end of checkArgs()
+    return args
+
+# the input arrays, freq_uency and intensity are large
+# Gotham Arrays, with irregular frequency samples.
+def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels, args):
+    """
+    Convert spectra to velocity space for each rest frequency,
+    stack them visually, and compute a summed spectrum on a
+    uniform velocity grid.
+
+    Parameters
+    ----------
+    freqs : lists of frequency arrays
+        Observed frequency array.
+    intensitys : lists of intensity arrays
+        Observed intensity array.
+    rmss : list
+        A single RMS for each pair of frequencies and intensities
+    nObs : integer
+        Number of different observation files plotting
+    rest_freqs : list
+        Molecular line rest frequencies.
+    weights : list
+        Molecular line weights for sums
+    labels : list
+        List of names of spectral lines
+
+    Returns
+    -------
+    vel_grid : array
+        Uniform velocity grid.
+    summed : array
+        Summed intensity on the uniform grid.
+    """
+
+    n_lines = len(rest_freqs)
+
+    # set default arguments appropriate for TMC 1 if no user input
+    args = checkArgs( args)
+    
     # prepare for autoscaling
     peakMax = 0.1,
 
@@ -125,11 +134,8 @@ def stackSumVelocity(
     vel_grid = np.arange(args.vmin, args.vmax + args.dv, args.dv)
     summed = np.zeros_like(vel_grid)
 
-    # For S/N estimation
-    individual_rms = []
-
     # Plot the summed spectrum.   if only sum, then make wider than tall
-    if args.plot == 'sum':
+    if args.plot == 'sum' or args.plot == 'freq':
         plt.figure(figsize=(8, 5))
     else:
         plt.figure(figsize=(8, 10))
@@ -137,103 +143,153 @@ def stackSumVelocity(
     # init values to clean up plotting
     lastMax = 0.
     plotOffset = 0.
+    offset = args.offset
     nplot = 0
     usedMaxWeight = 0.
     usedMaxFreq = 0.
-    
+
+    minFreq = min(rest_freqs)
+    maxFreq = max(rest_freqs)
+    dFreq = maxFreq - minFreq
+    # set text spaceing for plotting labels of intensity vs frequency
+    dFreqText = dFreq/100.
+
+    sumSigma2 = 0.
     #total weights of spectra used in sum.
     weightSum = 0.
     # now for all rest frequencies, find samples
     for i, (nu_rest, w) in enumerate(zip(rest_freqs, weights)):
 
-        # Convert to velocity
-        vel = freq_to_velocity(freq, nu_rest)
+        # now loop through all observations
+        for iObs in range( nObs):
+            # Convert to velocity
+            freq = np.array(freqs[iObs])
+            vel = freq_to_velocity( freq, nu_rest)
 
-        # Select velocity window
-        mask = (vel >= args.vmin) & (vel <= args.vmax)
-        v_slice = vel[mask]
-        I_slice = intensity[mask]
+            # Select velocity window
+            mask = (vel >= args.vmin) & (vel <= args.vmax)
+            v_slice = vel[mask]
+            intensity = np.array(intensitys[iObs])
+            I_slice = intensity[mask]
 
-        #don't use measurement if no points.
-        if len(I_slice) < 100:
-            print("Not enough samples for frequency %10.3f" % (nu_rest))
-            continue
-        print("Line Weight %6.3f for frequency %10.3f" % (w, nu_rest))
-
-        # now update off sets for data ranges
-        sliceMax = I_slice.max()
-        if nplot == 0:
-            offset = float(offset)
-            offset = max(sliceMax,offset)
-            peakMax = max(peakMax, 20.*sliceMax)
-
-        # now if a single maximum is way above other features
-        if args.ignore and (sliceMax > peakMax):
-            print("Likely a confusing line in the sum, ignoring %10.3f" %
-                  (nu_rest))
-            continue
-
-        if w > usedMaxWeight:
-            usedMaxWeight = w
-            usedMaxFreq = nu_rest
-            usedMaxLabel = labels[i]
+            #don't use measurement if no points.
+            if len(I_slice) < 100:
+#                print("Not enough samples for frequency %10.3f" % (nu_rest))
+                continue
             
-        # Normalize if requested
-        if args.normalize:
-            peak = np.max(np.abs(I_slice))
-            if peak > 0:
-                I_slice = I_slice / peak
-                sliceMax = sliceMax / peak
+            # now update plot label offsets for data ranges
+            sliceMax = I_slice.max()
+            if nplot == 0:
+                offset = float(args.offset)
+                offset = max(sliceMax,offset)
+                peakMax = max(peakMax, 20.*sliceMax)
 
-        # if removing a constant baseline, 
-        if args.baseline:
-            iMedian = np.median(I_slice)
-            I_slice = I_slice - iMedian
-            sliceMax = sliceMax - iMedan
+            # now if a single maximum is way above other features
+            if args.ignore and (sliceMax > peakMax):
+                print("Likely a confusing line in the sum, ignoring %10.3f" %
+                      (nu_rest))
+                continue
+
+            if w > usedMaxWeight:
+                usedMaxWeight = w
+                usedMaxFreq = nu_rest
+                usedMaxLabel = labels[i]
+
+            # Normalize if requested
+            if args.normalize:
+                peak = np.max(np.abs(I_slice))
+                if peak > 0:
+                    I_slice = I_slice / peak
+                    sliceMax = sliceMax / peak
+
+            # if removing a constant baseline, 
+            if args.baseline:
+                iMedian = np.median(I_slice)
+                I_slice = I_slice - iMedian
+                sliceMax = sliceMax - iMedan
             
-        # Compute RMS
-        vrange = args.vmax - args.vmin
-        dvrange = vrange/10.
-        maskRms1 = (v_slice >= args.vmin) & (v_slice <= (args.vmin+dvrange))
-        maskRms2 = (v_slice >= (args.vmax-dvrange)) & (v_slice < args.vmax)
-        rms1 = np.std(I_slice[maskRms1])
-        rms2 = np.std(I_slice[maskRms2])
-        rms = (rms1 + rms2)/2.
-        individual_rms.append(rms)
+            # now if plotting intensity vs frequency
+            if args.plot == 'freq':
+                f_slice = freq[mask]
+                nf = len(f_slice)
+                # these lists are only used to return total intensity vs frequency spectrum
+                if nplot == 0:
+                    xs = f_slice.tolist()
+                    ys = I_slice.tolist()
+                else:
+                    xs.extend(f_slice.tolist())
+                    ys.extend(I_slice.tolist())
+                plt.plot( f_slice, I_slice, lw=3)
+                flabel = "%d: %.3f - %s" % (iObs+1, nu_rest, labels[i])
+                # label line 
+                plt.text(f_slice[nf-1]+dFreqText, 0., flabel, rotation=90, fontsize=9)
+                
+                if args.gauss:
+                    fits, final = iterative_three_gaussian_fit(f_slice, I_slice)
 
-        # Interpolate onto uniform velocity grid.
-        # interp requires increaseing x axis.   Frequency -> velocity flips
-        interp_I = np.interp(vel_grid, np.flip(v_slice), np.flip(I_slice))
-        
-#        print("I slice min, max: %.3f, %.3f" % (min(I_slice),max(I_slice)))
-#        print("I inter min, max: %.3f, %.3f" % (min(interp_I),max(interp_I)))
+                
+            # Interpolate onto uniform velocity grid.
+            # interp requires increaseing x axis.   Frequency -> velocity flips
+            interp_I = np.interp(vel_grid, np.flip(v_slice), np.flip(I_slice))
 
-        # Weighted sum
-        summed += (w * interp_I)
-        weightSum = weightSum + w
-        # count plots to deal first update of offset
-        nplot = nplot + 1
+            # Weighted sum prep
+            # sum is weighted by inverse sigma 2 and weights
+            sigma = float(rmss[iObs]/w)
+            sigma2weight = sigma*sigma
+            # now sum reciprical sigma2s
+            sumSigma2 = sumSigma2 + (1./sigma2weight)
+            # now scale a new spectrum
+            asum = interp_I * (w/sigma2weight)
+            summed += asum
+            # separately sum the weights used
+            weightSum = weightSum + w
+            # count plots to deal first update of offset
+            nplot = nplot + 1
 
-        if args.plot == 'both' or args.plot == 'stack':
-            textOffset = plotOffset + (offset/3.)
-            # Plot stacked spectrum
-            plt.plot(v_slice, I_slice + plotOffset, lw=2)
-            plt.text(args.vmin + 1., textOffset,
-                     f"{nu_rest:.3f}", fontsize=10)
-            plt.text(args.vmax - 3., textOffset,
-                 labels[i], fontsize=10)
+            print("Obs: %d - Line Weight %6.3f for frequency %10.3f (sigma %.3f)" % \
+                  (iObs+1, w, nu_rest, sigma))
 
-            # must give rest of plots some space.
-            dOffset = max( offset, (max(I_slice)/2.))
-            plotOffset = plotOffset + dOffset
+            if args.plot == 'both' or args.plot == 'stack':
+                textOffset = plotOffset + (offset/3.)
+                # Plot stacked spectrum
+                plt.plot(v_slice, I_slice + plotOffset, lw=2)
+                plt.text(args.vmin + 1., textOffset,
+                         f"{nu_rest:.3f}", fontsize=10)
+                plt.text(args.vmin, textOffset,
+                         f"{(iObs+1):d}", fontsize=10)
+                plt.text(args.vmax - 3., textOffset,
+                         labels[i], fontsize=10)
 
+                if args.gauss:
+                    fits, final = iterative_three_gaussian_fit(v_slice, I_slice)
+
+                # must give rest of plots some space.
+                dOffset = max( offset, (max(I_slice)/2.))
+                plotOffset = plotOffset + dOffset
+
+            # end for all observations
+            
         # end for all rest frequencies
         
     # now normalize weights for strongest line
-    nSum = len(summed)
-    print("Weight Sum: %.3f for %d samples" % (weightSum, nSum ))
-    summed = summed * (1./ weightSum)
+    if nplot < 1 or sumSigma2 <= 0.:
+        print("No Lines in Observation Range, Exiting!")
+        print("")
+        exit()
+    summed = summed / sumSigma2
+    if args.plot != 'freq':
+        print("Weight Sum: %.3f.  Sum of weighted sigma squares %.3f" % (weightSum, sumSigma2 ))
     
+    # create a file name with time and molecule, but without special characters
+    datetime_iso = datetime.now().replace(microsecond=0).isoformat()
+    if isinstance( args.molecule, str):
+        moleculeNoDollar = args.molecule.replace("$","")
+    else:
+        moleculeNoDollar = ""
+    moleculeNoLatex = moleculeNoDollar.replace("{","")
+    moleculeNo = moleculeNoLatex.replace("}","")
+    saveFile = "%s-%s.pdf" % (moleculeNo, datetime_iso)
+
     if args.plot == 'both' or args.plot == 'sum':
         # now plot average
         plt.plot(vel_grid, summed + plotOffset, lw=3)
@@ -245,17 +301,34 @@ def stackSumVelocity(
         # plot the zero line for average
         plt.plot(vel_grid, (0.00001*summed) + plotOffset, 'g--', lw=.5)
         
-    plt.xlabel("Velocity (km/s)", fontsize=14)
-    if args.plot == 'sum':
-        plt.ylabel("Average Intensity", fontsize=14)
+    if args.plot == 'freq':
+#        plt.plot(np.array(xs), np.array(ys), lw=3)
+        plt.xlabel("Frequency (MHz)", fontsize=14)
+        plt.ylabel("Intensity (K)", fontsize=14)
+        if args.title == None:
+            plt.title("Frequency vs Intensity for %s" % (args.molecule))
+        else:
+            plt.title(args.title)
+        # finally show result
+        plt.tight_layout()
+        plt.show()
+        saveFile = "%s-%s.pdf" % (moleculeNo, datetime_iso)
+        plt.savefig(saveFile)
+        saveFile = "%s-%s.png" % (moleculeNo, datetime_iso)
+        plt.savefig(saveFile)
+        return xs, ys
     else:
-        plt.ylabel("Intensity + offset", fontsize=14)
-    # label for top of plot default
-    if args.title == None:
-        plt.title("Stack in Velocity %s with %s Spectra" %
-                  (args.molecule, args.survey))
-    else:
-        plt.title(args.title)
+        plt.xlim(args.vmin, args.vmax)        
+        plt.xlabel("Velocity (km/s)", fontsize=14)
+        if args.plot == 'sum':
+            plt.ylabel("Average Intensity (K)", fontsize=14)
+        else:
+            plt.ylabel("Intensity (K) + offset", fontsize=14)
+        # label for top of plot default
+        if args.title == None:
+            plt.title("Stack in Velocity %s " % (args.molecule))
+        else:
+            plt.title(args.title)
     
     # Now fit a gaussian to the sum
     sumMax = summed.max()
@@ -263,6 +336,7 @@ def stackSumVelocity(
     velMax = vel_grid[iMax]
     rms = np.std(summed)
 
+    vrange = args.vmax - args.vmin
     # initial guess is at max location, with 1/20th toe velocity rangea
     initial_guess = [ sumMax, velMax, ((vrange)*.05)]
     try:
@@ -312,11 +386,6 @@ def stackSumVelocity(
     plt.tight_layout()
     plt.show()
 
-    # create a file name with time and molecule without special characters
-    datetime_iso = datetime.now().replace(microsecond=0).isoformat()
-    moleculeNoDollar = molecule.replace("$","")
-    moleculeNoLatex = moleculeNoDollar.replace("{","")
-    moleculeNo = moleculeNoLatex.replace("}","")
     saveFile = "%s-%s.pdf" % (moleculeNo, datetime_iso)
     plt.savefig(saveFile)
     saveFile = "%s-%s.png" % (moleculeNo, datetime_iso)

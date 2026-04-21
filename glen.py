@@ -2,7 +2,11 @@
 #This module plots stacked versions of molecular lines
 #based on Gotham and other GBT Spectra 
 #HISTORY
+#26Apr21 GIL merge weights and multiple spectra fitting
 #26Apr11 GIL use TMC Turner-Langston data by default
+#26Feb26 GIL start to use weights in Sum, add 3rd plot type which is freq vs intensity
+#26Feb25 GIL Assume 1st and 2nd FITS file columns are Freq and Temp
+#26Feb24 GIL ArgParse returns structre not individual items
 #26Feb23 GIL check for astropy before import
 #26Feb21 GIL add more command line arguments
 #26Feb20 GIL use parsearg and take many input parameters
@@ -13,6 +17,7 @@
 import sys
 import os
 import matplotlib.pyplot as plt
+#frequently need an additional astropy library
 try:
     from astropy.table import Table
 except:
@@ -22,8 +27,8 @@ except:
     print("")
     exit()
 import numpy as np
-from stackSumVelocity import *
 from pathlib import Path
+from stackSumVelocity import *
 from idl2mathtext import *
 from getlists import *
 from parselist import *
@@ -38,11 +43,11 @@ def getObservationFile( testName):
     """
     # first see if the file is in the current directroy
     testFile=str(Path.cwd()) + "/data/" + testName
+    print("Looking for %s: trying %s" % (testName, testFile))
     if os.path.exists(testFile):
         spectraFile = testFile
     else:
         testFile=str(Path.cwd()) + "/" + testName
-        print("TestFile: %s" % (testFile))
         if os.path.exists(testFile):
             spectraFile = testFile
         else:
@@ -68,21 +73,23 @@ def getObservationFile( testName):
                         exit()
                 print("wget was successful, continuing")
                 spectraFile=testFile
+    print("%s -> %s" % (testName, spectraFile))
     return spectraFile
     # end of getObservationFile()
     
-def getObservations():
+def getObservations( testNames):
     """ 
     getObservations looks for two "standard" GBT Observation files and
-    if found, returns a list of file names
+    if any files found, returns a list of file names
     """
 
-    testNames = ["tmc-tlq.fits", "gotham_drv.fits"]
     fileList = []
     nFiles = 0
+    nTry = len(testNames)
     # for all file names to search file
-    for testName in testNames:
-        spectraFile = getObservationFile
+    for iTry in range(nTry):
+        testName = testNames[iTry]
+        spectraFile = getObservationFile( testName)
         if spectraFile != "":
             fileList.append(spectraFile)
             nFiles = nFiles + 1
@@ -90,28 +97,30 @@ def getObservations():
         print("No Observing file found, exiting")
         exit()
     return fileList
-    # end of getObservations()
-    
+    # end of getObservations)
+
 # -1. Parse all the input arguments
 args = stackArgParse()
 
-spectraFile = ""
-# if no spectra observation supplied, try to find Gotham obs, the default
-if args.data_files == None:
-    spectraFile = getObservationFile()
+spectraFiles = args.data_files.split(" ")
+# if no spectra observation supplied, try to find Turner-Langston and Gotham obs, the default
+spectraFiles = getObservations( spectraFiles)
+
+nObs = len( spectraFiles)
+if nObs < 1:
+    print("!!! Can not find any observation files matching: %s" % (spectraFiles))
 else:
-    spectraFile = args.data_files
-
-print("Stacking spectral lines from Model file: %s" % (spectraFile))
-
+    print("Attempting line stacking for %d observation files" % (nObs))
+    
 # 0. First read a line list
 # The line list is formated for use in idl.  This list will be converted
 # into a matplotlib friendly array
 
 if args.intensity == None:
-    print("Model intensity file needed!! ")
+    print("A model intensity file is needed")
     args.intensity = "pro/hc5n.pro"
-    print("Default model intensity file: %s" % (args.intensity))
+    args.molecule = "$HC_5N$"
+    print("Using model default: %s" % (args.intensity))
 
 print("Parsing Model Intensity File (IDL): %s" % (args.intensity))
 with open(args.intensity) as f:
@@ -132,85 +141,145 @@ if molecule == None:
         declared, funcs, referenced = parse_idl_file(args.intensity)
         iPlot = declared.index('plotTitle')
         moleculeIdl = referenced[iPlot]
-        args.molecule = idl2mathtext(moleculeIdl)
+        molecule = idl2mathtext(moleculeIdl)
     except:
-        moleculeIdl = "HC!D5!NN$"
-        args.molecule = "$HC_5N$"
         iPlot = 0
+
+names = []
+nGood = 0   # count number of found observations
+#devide the files by spaces
     
-# 1. Read the FITS file into an Astropy Table object
-# The Table.read() method is a high-level interface for reading FITS tables.
-# Replace 'your_fits_file.fits' with the path to your file.
-try:
-    table = Table.read(spectraFile, format='fits')
-    print(f"Successfully read spectral table with columns: {table.colnames}")
-except FileNotFoundError:
-    print("Error: The file %s was not found." % (spectraFile))
-    exit()
-except Exception as e:
-    print(f"An error occurred while reading the FITS file: {e}")
-    exit()
+for iObs in range(nObs):
+    # 1. Read the FITS file into an Astropy Table object
+    # The Table.read() method is a high-level interface for reading FITS tables.
+    # prepare to read several observing files
 
-try:
-    print("Object: %s" % (table.meta['OBJECT']))
-except:
-    print("Object Name not found")
-#print(table.columns['frequency'].unit)
-
-try:
-    findex = table.colnames.index("frequency")
-    fname  = "frequency"
-except:
     try:
-        findex = table.colnames.index("FREQUENCY")
-        fname  = "FREQUENCY"
-    except:
-        #Frequency column not found assume 1nd column
-        findex = 0
-        fname = table.colnames[findex]
+        table = Table.read(spectraFiles[iObs], format='fits')
+    except FileNotFoundError:
+        print("Error: The file %s was not found." % (spectraFiles[iObs]))
+        exit()
+    except Exception as e:
+        print(f"Error reading the FITS file: {e}")
+        exit()
 
-# try to find T main beam column. 
-try:
-    tindex = table.colnames.index("Tmb")
-    tname = "Tmb"
-except:
+    # for all spectral data files, abbreviate known Surveys
+    if "gotham" in spectraFiles[iObs].lower():
+        names.append("GOTHAM")
+    else:
+        if "tmc-tlq" in spectraFiles[iObs].lower():
+            names.append("TMC-TLQ")
+        else: # deduce survey name from file name
+            # else unknow survey, parse file name
+            aFile = spectraFiles[iObs]
+            aparts = aFile.split("/")
+            nparts = len( aparts)
+            filepart = aparts[nparts-1]
+            aparts = filepart.split(".")
+            surveyName = aparts[0]
+            names.append(surveyName)
+
+    # sanity test, try to find object name
     try:
-        tindex = table.colnames.index("TMB")
-        tname = "TMB"
+        print("Object: %s" % (table.meta['OBJECT']))
     except:
-        #Temp column not found assume 2nd column
-        tindex = 1
-        tname = table.colnames[tindex]
-# now use indices to get column units
-xaxis=table.columns[fname].unit
-yaxis=table.columns[tname].unit
+        print("Object Name not found")
+
+    print("Survey %2d: File: %s" % (iObs, spectraFiles[iObs]))
+
+    try:
+        findex = table.colnames.index("frequency")
+        fname  = "frequency"
+    except:
+        try:
+            findex = table.colnames.index("FREQUENCY")
+            fname  = "FREQUENCY"
+        except:
+            #Frequency column not found assume 1nd column
+            findex = 0
+            fname = table.colnames[findex]
+
+    # try to find T main beam column. 
+    try:
+        tindex = table.colnames.index("Tmb")
+        tname = "Tmb"
+    except:
+        try:
+            tindex = table.colnames.index("TMB")
+            tname = "TMB"
+        except:
+            #Temp column not found assume 2nd column
+            tindex = 1
+    tname = table.colnames[tindex]
+    # now use indices to get column units
+    xaxis=table.columns[fname].unit
+    yaxis=table.columns[tname].unit
     
-# 2. Access the data columns
-# You can access columns by their names.
-# Replace 'column_name_x' and 'column_name_y' with the actual column names in your file.
-try:
-    x_data = table[fname]
-    y_data = table[tname]
+    # 2. Access the data columns
+    # You can access columns by their names.
+    # Replace 'column_name_x' and 'column_name_y' with the actual column names in your file.
+    try:
+        x_data = table[fname]
+        y_data = table[tname]
 
-    # Convert to plain NumPy arrays if needed for specific plotting functions
-    x_array = np.array(x_data)
-    y_array = np.array(y_data)
-
-except KeyError as e:
-    print(f"Error: Column name {e} not found in the FITS table.")
-    print(f"Available columns are: {table.colnames}")
-    exit()
-
-print("N Freqs: %5d  %.2f " % (len(x_array), x_array[0]))
-print("N Inten: %5d  %.2f " % (len(y_array), y_array[0]))
-          
+        # Convert to plain NumPy arrays if needed for specific plotting functions
+        x_array = np.array(x_data)
+        y_array = np.array(y_data)
+        nGood = nGood + 1
+    except KeyError as e:
+        print("For observation %2d: Can not parse data in file %s" % (iObs, spectraFiles[iObs]))
+        print(f"Error: Column name {e} not found in the FITS table.")
+        print(f"Available columns are: {table.colnames}")
+        continue
+        
 # now loop and stack velocities for multiople line lists
+    nCol = len( table.colnames)    # get count of columns
+    freqName = table.colnames[findex]   # this assumes first column is Frequency
+    tempName = table.colnames[tindex]   # second column is intensity
+        
+    print("Plotting %s vs %s " % (tempName, freqName))
+    if nCol > 2:                   # if an RMS/sigma column
+        rmsName = table.colnames[2]
 
+        rms_array = table[rmsName]
+        nRms = len( rms_array)
+        nRms2 = int(nRms/2)
+        rms = [rms_array[nRms2]]
+    else:
+        # if no rms column compute RMS
+        nY = len( yaxis)
+        nbY = int(nY/10)
+        neY = nY - nby
+        rms = np.stddev( yaxis[nbY:neY])
+
+    # if first observing file, create the data lists
+    if iObs == 0:
+        xs = [x_array]
+        ys = [y_array]
+        rmss = [rms]
+        # only will need one representative RMS for each sum.
+    else:  # else append to lists
+        xs = [xs, x_array]
+        ys = [ys, y_array]
+        rmss = [rmss, rms]
+        
+# end of reading all observing files
+
+if nGood < 1:
+    print("!!! Unable to read any spectra, exiting !!!")
+    exit()
+    
 # convert labels to matplot lib nice formats
 for i, alabel in enumerate( labels):
     labels[i] = idl2mathtext( alabel)
 
+if args.title == None:
+    if args.plot == 'freq':
+        args.title = "%s Line Strength Comparison for %s Observations" % (args.molecule, str(names))
+    else:
+        args.title = "Stack %s in Velocity %s Observations" % (args.molecule, str(names))
+
 # finally do all computations
-velocity, intensity = stackSumVelocity( x_array, y_array, freqs,
-                                           weights, labels, args)
+velocity, intensity = stackSumVelocity( xs, ys, rmss, nObs,
+                                        freqs, weights, labels, args)
 
