@@ -275,7 +275,7 @@ for i, alabel in enumerate( labels):
 
 if args.title == None:
     if args.plot == 'freq':
-        args.title = "%s Line Strength Comparison for %s Observations" % (args.molecule, str(names))
+        args.title = "%s Line Strength Comparison for %s" % (args.molecule, str(names))
     else:
         args.title = "Stack %s in Velocity %s Observations" % (args.molecule, str(names))
 
