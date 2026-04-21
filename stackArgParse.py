@@ -1,5 +1,6 @@
 #python
 #HISTORY
+#26Apr21 GIL Allow multiple observation files
 #26Feb23 GIL make ignoring confusing lines an option
 #26Feb21 GIL add dv and baseline options
 #26Feb20 GIL add usage and more options
@@ -127,7 +128,7 @@ def stackArgParse():
         "-p", "--plot",
         type=str,
         default='both',
-        help="Type of plot: one of 'stack', 'sum' or 'both'. Default 'both'"
+        help="Type of plot: one of 'stack', 'sum', 'freq' or 'both'. Default 'both'"
     )
 
     # Optionally report SNR of fit
