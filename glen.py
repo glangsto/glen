@@ -23,55 +23,74 @@ except:
     exit()
 import numpy as np
 from stackSumVelocity import *
+from pathlib import Path
 from idl2mathtext import *
 from getlists import *
 from parselist import *
 from stackArgParse import *
 
-def getObservationFile():
+def getObservationFile( testName):
     """
-    getObservationFile() will try to find the (large) observation file.
+    getObservationFile() will try to find the (large) observation files.
+    Two files are included by default
     If the file is not found, then the program will try to download it
     to the current directory.
     """
     # first see if the file is in the current directroy
-    testFile='./gotham_drv.fits'
+    testFile=str(Path.cwd()) + "/data/" + testName
     if os.path.exists(testFile):
         spectraFile = testFile
     else:
-        from pathlib import Path
-
-        testFile = str(Path.home()) + "/Downloads/gotham_drv.fits"
+        testFile=str(Path.cwd()) + "/" + testName
         print("TestFile: %s" % (testFile))
-        # save the download file, in case the  next step does not work
-        downloadFile = testFile
-# else see if the file file was downloaded
         if os.path.exists(testFile):
             spectraFile = testFile
         else:
-            # else maybe glangsto downloaded it (for GBO only)
-            testFile='/users/glangsto/Downloads/gotham_drv.fits'
+            testFile=str(Path.home()) + "/Downloads/" + testName
             if os.path.exists(testFile):
                 spectraFile = testFile
             else:
                 # else the file can be downloaded.
                 import subprocess
-                webFile = "https://www.gb.nrao.edu/GbtLegacyArchive/GOTHAM/calibrated/gotham_drv.fits"
-                print("No Gotham file yet found!")
-                print("Wget-ting %s" % ( webFile))
-                print("This may take a while...")
-                print("")
-                try:
-#                    wgetArgs = "-O %s %s" % (downloadFile, webFile)
-                    getCommand=["/bin/wget", "-O", downloadFile, webFile]
-                    result=subprocess.run( getCommand)
-                except:
-                    print("Failed to get a spectra measurement file")
-                    exit()
+                # else maybe glangsto downloaded it (for GBO only)
+                if testName == "gotham_drv.fits":
+                    webFile = "https://www.gb.nrao.edu/GbtLegacyArchive/GOTHAM/calibrated/gotham_drv.fits"
+                    print("No Gotham file yet found!")
+                    print("Wget-ting %s" % ( webFile))
+                    print("This may take a while...")
+                    print("")
+                    try:
+                        testFile = str(Path.cwd()) + "/" + testName
+                        getCommand=["/bin/wget", "-O", testFile, webFile]
+                        result=subprocess.run( getCommand)
+                    except:
+                        print("Failed to get a spectra measurement file")
+                        exit()
                 print("wget was successful, continuing")
-                spectraFile=downloadFile
+                spectraFile=testFile
     return spectraFile
     # end of getObservationFile()
+    
+def getObservations():
+    """ 
+    getObservations looks for two "standard" GBT Observation files and
+    if found, returns a list of file names
+    """
+
+    testNames = ["tmc-tlq.fits", "gotham_drv.fits"]
+    fileList = []
+    nFiles = 0
+    # for all file names to search file
+    for testName in testNames:
+        spectraFile = getObservationFile
+        if spectraFile != "":
+            fileList.append(spectraFile)
+            nFiles = nFiles + 1
+    if nFiles < 1:
+        print("No Observing file found, exiting")
+        exit()
+    return fileList
+    # end of getObservations()
     
 # -1. Parse all the input arguments
 args = stackArgParse()
