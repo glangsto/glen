@@ -275,9 +275,9 @@ for i, alabel in enumerate( labels):
 
 if args.title == None:
     if args.plot == 'freq':
-        args.title = "%s Line Strength Comparison for %s" % (args.molecule, str(names))
+        args.title = "%s Line Strengths %s" % (args.molecule, str(names))
     else:
-        args.title = "Stack %s in Velocity %s Observations" % (args.molecule, str(names))
+        args.title = "Stack %s in Velocity %s" % (args.molecule, str(names))
 
 # finally do all computations
 velocity, intensity = stackSumVelocity( xs, ys, rmss, nObs,

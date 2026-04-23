@@ -1,6 +1,7 @@
 #/bin/python
 #Function to stack in velocity the plots and sum the total.
 #HISTORY
+#26Apr22 GIL bigger font for dual plots
 #26Apr21 GIL clean up intensity vs frequency plot
 #26Apr11 GIL fit up to 3 gaussians to input individual spectra
 #26Feb26 GIL revised sums to use RMSs for optimum measurement
@@ -144,7 +145,7 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
         ax.tick_params(axis='y', labelsize=14)
         ax.xaxis.set_minor_locator(MultipleLocator(1.))
     elif args.plot == 'freq':
-        fig = plt.figure(figsize=(8,8))
+        fig = plt.figure(figsize=(8,10))
         ax = fig.add_subplot()
         ax.tick_params(axis='x', labelsize=14)
         ax.tick_params(axis='y', labelsize=14)
@@ -173,6 +174,11 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
     sumSigma2 = 0.
     #total weights of spectra used in sum.
     weightSum = 0.
+    titleFont = 20
+    annotateFont = 12
+    axisFont = 16
+    axisLabelFont = 18
+    
     # now for all rest frequencies, find samples
     for i, (nu_rest, w) in enumerate(zip(rest_freqs, weights)):
 
@@ -238,7 +244,7 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
                 plt.plot( f_slice, I_slice, lw=3)
                 flabel = "%d: %.3f - %s" % (iObs+1, nu_rest, labels[i])
                 # label line 
-                plt.text(f_slice[nf-1]+dFreqText, 0., flabel, rotation=90, fontsize=12)
+                plt.text(f_slice[nf-1]+dFreqText, 0., flabel, rotation=90, fontsize=annotateFont)
                 
                 if args.gauss:
                     fits, final = iterative_three_gaussian_fit(f_slice, I_slice)
@@ -266,21 +272,21 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
                   (iObs+1, w, nu_rest, sigma))
 
             if args.plot == 'both' or args.plot == 'stack':
-                textOffset = plotOffset + (offset/3.)
+                textOffset = plotOffset + (offset/4.)
                 # Plot stacked spectrum
                 plt.plot(v_slice, I_slice + plotOffset, lw=2)
                 plt.text(args.vmin + 1., textOffset,
-                         f"{nu_rest:.3f}", fontsize=10)
+                         f"{nu_rest:.3f}", fontsize=annotateFont)
                 plt.text(args.vmin, textOffset,
-                         f"{(iObs+1):d}", fontsize=10)
+                         f"{(iObs+1):d}", fontsize=annotateFont)
                 plt.text(args.vmax - 3., textOffset,
-                         labels[i], fontsize=10)
+                         labels[i], fontsize=annotateFont)
 
                 if args.gauss:
                     fits, final = iterative_three_gaussian_fit(v_slice, I_slice)
 
                 # must give rest of plots some space.
-                dOffset = max( offset, (max(I_slice)/2.))
+                dOffset = max( offset, (max(I_slice)*.33))
                 plotOffset = plotOffset + dOffset
 
             # end for all observations
@@ -312,20 +318,21 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
         # put text above plotted lines
         textOffset = plotOffset + (offset/3.)
         plt.text(args.vmax - 3., textOffset,
-                 "Weighted Sum", fontsize=10)
+                 "Weighted Sum", fontsize=annotateFont)
 
         # plot the zero line for average
         plt.plot(vel_grid, (0.00001*summed) + plotOffset, 'g--', lw=.5)
         
     if args.plot == 'freq':
 #        plt.plot(np.array(xs), np.array(ys), lw=3)
-        plt.xlabel("Frequency (MHz)", fontsize=16)
-        plt.ylabel("Intensity (K)", fontsize=16)
+        plt.xlabel("Frequency (MHz)", fontsize=axisLabelFont)
+        plt.ylabel("Intensity (K)", fontsize=axisLabelFont)
         if args.title == None:
-            plt.title("Frequency vs Intensity for %s" % (args.molecule), fontsize=16)
+            plt.title("Frequency vs Intensity for %s" % (args.molecule), fontsize=titleFont)
         else:
-            plt.title(args.title, fontsize=16)
+            plt.title(args.title, fontsize=titleFont)
         # finally show result
+        plt.ylim(bottom=-offset/2.)
         plt.tight_layout()
         plt.show()
         saveFile = "%s-%s.pdf" % (moleculeNo, datetime_iso)
@@ -335,16 +342,16 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
         return xs, ys
     else:
         plt.xlim(args.vmin, args.vmax)        
-        plt.xlabel("Velocity (km/s)", fontsize=14)
+        plt.xlabel("Velocity (km/s)", fontsize=axisLabelFont)
         if args.plot == 'sum':
-            plt.ylabel("Weighted Intensity (K)", fontsize=16)
+            plt.ylabel("Weighted Intensity (K)", fontsize=axisLabelFont)
         else:
-            plt.ylabel("Intensity (K) + offset", fontsize=16)
+            plt.ylabel("Intensity (K) + offset", fontsize=axisLabelFont)
         # label for top of plot default
         if args.title == None:
-            plt.title("Stack in Velocity %s " % (args.molecule), fontsize=16)
+            plt.title("Stack in Velocity %s " % (args.molecule), fontsize=titleFont)
         else:
-            plt.title(args.title, fontsize=16)
+            plt.title(args.title, fontsize=titleFont)
     
     # Now fit a gaussian to the sum
     sumMax = summed.max()
@@ -365,8 +372,10 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
         print("                 : Line Width %6.3f km/sec" % (fit_sigma))
         # if velocity not specified and fit seems successful
         if args.velocity == None:
-            vlabel = "Vel: %.3f$\pm$%.3f Width:%.3f$\pm$%.3f" % \
-                (fit_x0, errors[1], fit_sigma, errors[2])
+            vlabel = "Vel: %.3f$\pm$%.3f" % \
+                (fit_x0, errors[1])
+            wlabel = "Width:%.3f$\pm$%.3f" % \
+                (fit_sigma, errors[2])
             velocity = fit_x0
         else:
             velocity = float(args.velocity)
@@ -374,17 +383,16 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
         print("Max Model Line   : %12.6f   %s (%.3f)" %
               (usedMaxFreq, usedMaxLabel, usedMaxWeight))
         plt.axvline(velocity, color='blue', linestyle="--", linewidth=1)
-        plabel = "Peak: %.4f$\pm$%.4f" % (fit_A, errors[0])
+        plabel = "Peak: %.3f$\pm$%.3f" % (fit_A, errors[0])
 
         if args.plot == 'both' or args.plot == 'sum':
-            plt.text(velocity+(vrange*.05), plotOffset+sumMax,
-                     vlabel, fontsize=12)
+            plt.text(velocity-(vrange*.45), plotOffset+sumMax,
+                     plabel, fontsize=annotateFont)
+            plt.text(velocity-(vrange*.45), plotOffset+sumMax-offset,
+                     vlabel, fontsize=annotateFont)
+            plt.text(velocity-(vrange*.45), plotOffset+sumMax-(2.*offset),
+                     wlabel, fontsize=annotateFont)
             plt.plot(vel_grid, gaussian(vel_grid, *popt)+plotOffset, 'r--')
-            plt.text(velocity-(vrange*.3), plotOffset+sumMax,
-                     plabel, fontsize=12)
-        else:
-            plt.text(velocity+(vrange*.05), plotOffset-dOffset+sliceMax,
-                     vlabel, fontsize=12)
             # now do not double plot velocity
         velocity = None
         
@@ -395,10 +403,11 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
         velocity = float(velocity)
         vlabel = "Vel: %.2f" % (velocity)
         plt.axvline(velocity, color='blue', linestyle="--", linewidth=1)
-        plt.text(velocity+(vrange*.01), plotOffset+sumMax,
-                 vlabel, fontsize=10)
+        plt.text(velocity-(vrange*.4), plotOffset+sumMax-(2.*offset),
+                 vlabel, fontsize=annotateFont)
 
     # finally show result
+    plt.ylim(bottom=-offset/2.,top=plotOffset+sumMax+offset)
     plt.tight_layout()
     plt.show()
 

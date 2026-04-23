@@ -1,5 +1,6 @@
 #python
 #HISTORY
+#26Apr22 GIL Update minimum offset y axis offset
 #26Apr21 GIL Allow multiple observation files
 #26Feb23 GIL make ignoring confusing lines an option
 #26Feb21 GIL add dv and baseline options
@@ -119,8 +120,8 @@ def stackArgParse():
     parser.add_argument(
         "-o", "--offset",
         type=str,
-        default = "0.25",
-        help="Intensity offset between plots (K),  Default = 0.25"
+        default = "0.5",
+        help="Intensity offset between plots (K)"
     )
 
     # Optional string argument
