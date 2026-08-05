@@ -1,5 +1,7 @@
 #python
 #HISTORY
+#26Aug05 GIL fix default velocity type
+#26May05 GIL Add optional molecule parameters
 #26Apr22 GIL Update minimum offset y axis offset
 #26Apr21 GIL Allow multiple observation files
 #26Feb23 GIL make ignoring confusing lines an option
@@ -28,6 +30,10 @@ line stacking to detect previously un-detected molecular species.
 
 Article: "Detection of C Isotopomers of the Molecule HC_7N" 
 (Langston, G., & Turner, B., 2007, The Astrophysical Journal, 658, 455).
+
+For an extensive list of molecules detected by the GOTHAM survey see:
+Article: "The Molecular Inventory of TMC-1 with GOTHAM Observations"
+(Ci Xue et al., 2025, The Astrophysical Journal supplement Serices, 281, 9).
 
 Example:
  ./glen -i pro/hc5n.pro --molecule '$HC_{5}N$' --plot 'sum'
@@ -158,6 +164,7 @@ def stackArgParse():
     parser.add_argument(
         "-v", "--velocity",
         type=str,
+#        default="5.7",
         help="Relative Velocity of object (km/sec, LSRK)"
     )
 

@@ -1,6 +1,8 @@
 #/bin/python
 #Function to stack in velocity the plots and sum the total.
 #HISTORY
+#26Aug05 GIL fix velocity type
+#26Apr26 GIL return all parameters of the fit
 #26Apr22 GIL bigger font for dual plots
 #26Apr21 GIL clean up intensity vs frequency plot
 #26Apr11 GIL fit up to 3 gaussians to input individual spectra
@@ -175,9 +177,9 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
     #total weights of spectra used in sum.
     weightSum = 0.
     titleFont = 20
-    annotateFont = 12
-    axisFont = 16
-    axisLabelFont = 18
+    annotateFont = 16
+    axisFont = 18
+    axisLabelFont = 20
     
     # now for all rest frequencies, find samples
     for i, (nu_rest, w) in enumerate(zip(rest_freqs, weights)):
@@ -244,7 +246,8 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
                 plt.plot( f_slice, I_slice, lw=3)
                 flabel = "%d: %.3f - %s" % (iObs+1, nu_rest, labels[i])
                 # label line 
-                plt.text(f_slice[nf-1]+dFreqText, 0., flabel, rotation=90, fontsize=annotateFont)
+                plt.text(f_slice[nf-1]+dFreqText, 0., flabel, rotation=90,
+                         fontsize=annotateFont)
                 
                 if args.gauss:
                     fits, final = iterative_three_gaussian_fit(f_slice, I_slice)
@@ -312,6 +315,16 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
     moleculeNo = moleculeNoLatex.replace("}","")
     saveFile = "%s-%s.pdf" % (moleculeNo, datetime_iso)
 
+    # set default values for results
+    Vpeak = 0.
+    Ipeak = 0.
+    Isum  = 0.
+    Vfit = 0.
+    Vwidth = 0.
+    IsumRms = 10.
+    VfitRms = 1000.
+    VwidthRms = 1000.
+
     if args.plot == 'both' or args.plot == 'sum':
         # now plot average
         plt.plot(vel_grid, summed + plotOffset, lw=3)
@@ -359,9 +372,20 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
     velMax = vel_grid[iMax]
     rms = np.std(summed)
 
+    Widthfit = 0.
+    SumRms = 0.
+    Vrms = 0.
+    WidthRms = 0.
     vrange = args.vmax - args.vmin
     # initial guess is at max location, with 1/20th toe velocity rangea
     initial_guess = [ sumMax, velMax, ((vrange)*.05)]
+    # set default search velocity
+    if args.velocity != None:
+        velocity = float( arg.velocity)
+    else:
+        velocity = 0.
+
+    # now try to fit sum velocity
     try:
         popt, pcov = curve_fit(gaussian, vel_grid, summed, p0=initial_guess)
         # Extract the fitted parameters
@@ -371,41 +395,46 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
         print("                 : Velocity   %6.3f km/sec" % (fit_x0))
         print("                 : Line Width %6.3f km/sec" % (fit_sigma))
         # if velocity not specified and fit seems successful
+        wlabel = ""
         if args.velocity == None:
             vlabel = "Vel: %.3f$\pm$%.3f" % \
                 (fit_x0, errors[1])
             wlabel = "Width:%.3f$\pm$%.3f" % \
                 (fit_sigma, errors[2])
-            velocity = fit_x0
+            Vpeak = fit_x0
+            WidthFit = fit_sigma
+            velocity = Vpeak
         else:
-            velocity = float(args.velocity)
-            vlabel = "Vel: %.3f" % (args.velocity)
+            Vpeak = float(args.velocity)
+            vlabel = "Vel: %.3f" % (float(args.velocity))
+            velocity = Vpeak
         print("Max Model Line   : %12.6f   %s (%.3f)" %
               (usedMaxFreq, usedMaxLabel, usedMaxWeight))
         plt.axvline(velocity, color='blue', linestyle="--", linewidth=1)
         plabel = "Peak: %.3f$\pm$%.3f" % (fit_A, errors[0])
 
         if args.plot == 'both' or args.plot == 'sum':
-            plt.text(velocity-(vrange*.45), plotOffset+sumMax,
+            plt.text(Vpeak-(vrange*.45), plotOffset+sumMax,
                      plabel, fontsize=annotateFont)
-            plt.text(velocity-(vrange*.45), plotOffset+sumMax-offset,
+            plt.text(Vpeak-(vrange*.45), plotOffset+sumMax-offset,
                      vlabel, fontsize=annotateFont)
-            plt.text(velocity-(vrange*.45), plotOffset+sumMax-(2.*offset),
+            plt.text(Vpeak-(vrange*.45), plotOffset+sumMax-(2.*offset),
                      wlabel, fontsize=annotateFont)
             plt.plot(vel_grid, gaussian(vel_grid, *popt)+plotOffset, 'r--')
             # now do not double plot velocity
-        velocity = None
+        Vpeak = None
         
     except RuntimeError as e:
         print(f"Error during fitting: {e}. No summed intensity detected.")
 
     if args.velocity != None:
-        velocity = float(velocity)
-        vlabel = "Vel: %.2f" % (velocity)
+        Vpeak = float(args.velocity)
+        vlabel = "Vel: %.2f" % (Vpeak)
         plt.axvline(velocity, color='blue', linestyle="--", linewidth=1)
         plt.text(velocity-(vrange*.4), plotOffset+sumMax-(2.*offset),
                  vlabel, fontsize=annotateFont)
-
+    else:
+       Vpeak = 0.0
     # finally show result
     plt.ylim(bottom=-offset/2.,top=plotOffset+sumMax+offset)
     plt.tight_layout()
@@ -429,4 +458,4 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
         print("\n--- S/N Improvement --- %10.5f" % (measured_gain))
         print("RMS of sum %10.5f (%10.5f, %10.5f)" % (rms, rms1, rms2))
 
-    return vel_grid, summed
+    return Vpeak, Ipeak, Isum, Vfit, Widthfit, SumRms, Vrms, WidthRms

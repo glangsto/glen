@@ -106,6 +106,6 @@ stackSumVelocity( x_array, y_array, freqs, labels,
                   molecule, 
                   vmin=2., vmax=12., dv=0.05, offset=.3,
                   weights=weights, normalize=False,
-                  velocity=args.velocity)
+                  velocity=float(args.velocity))
 
 
