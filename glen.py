@@ -1,7 +1,10 @@
-#python
 #This module plots stacked versions of molecular lines
 #based on Gotham and other GBT Spectra 
 #HISTORY
+#26Aug07 GIL remove models argument.   Prepare to process/sum multiple models
+#26Aug05 GIL change the argument list to have models at the end. 
+#26May05 GIL enable abundance estimate
+#26Apr26 GIL optionally commpute molecule abundance
 #26Apr21 GIL merge weights and multiple spectra fitting
 #26Apr11 GIL use TMC Turner-Langston data by default
 #26Feb26 GIL start to use weights in Sum, add 3rd plot type which is freq vs intensity
@@ -99,6 +102,40 @@ def getObservations( testNames):
     return fileList
     # end of getObservations)
 
+def getIdlMoleculeName( text):
+    """
+    Find IDL molecule name in massive string of frequencies etc
+    """
+    # if no luck return None string
+    molecule = None
+
+    # look for molecule name
+    try:
+        textparts = text.split('plotTitle')
+        if len(textparts) > 1:
+            titleparts = textparts[1]
+            moleculeparts = titleparts.split('=')
+            if len(moleculeparts) > 1:
+                moleculename = moleculeparts[1]
+                nameparts = moleculename.split("'")
+                #print("NameParts: %d", len(nameparts))
+                # print(nameparts)
+                if len(nameparts) > 1:
+                    moleculeIdl = nameparts[1]
+            else:
+                print("Did not find = in idl file")
+        else:
+            print("Did not find plotTitle in idl file")
+        print("Looking for molecule Name: %s" % (moleculeIdl))
+        inMolecule = idl2mathtext(moleculeIdl)
+        print("Looking for molecule Name: %s" % (inMolecule))
+        molecule = inMolecule
+    except:
+        print("Did not find molecule name in Model file: %s" % (aModel))
+
+    return molecule
+    # end of get molecule name
+
 # -1. Parse all the input arguments
 args = stackArgParse()
 
@@ -111,64 +148,15 @@ if nObs < 1:
     print("!!! Can not find any observation files matching: %s" % (spectraFiles))
 else:
     print("Attempting line stacking for %d observation files" % (nObs))
-    
-# 0. First read a line list
-# The line list is formated for use in idl.  This list will be converted
-# into a matplotlib friendly array
 
-if args.intensity == None:
-    print("A model intensity file is needed")
-    args.intensity = "pro/hc5n.pro"
-    args.molecule = "$HC_5N$"
-    print("Using model default: %s" % (args.intensity))
-
-print("Parsing Model Intensity File (IDL): %s" % (args.intensity))
-with open(args.intensity) as f:
-    text = f.read()
-
-freqs, labels, weights = extract_idl_arrays(text)
-
-print("%3d freqs   1st: %.3f" % (len(freqs), freqs[0]))
-print("%3d labels  1st: %s" %  (len(labels), labels[0]))
-print("%3d weights 1st: %.3f" % (len(weights), weights[0]))
-f.close()
-
-molecule= args.molecule
-# if no user supplied molecue name
-if molecule == None:
-    try:
-        # try to find specific molecule tag from model.
-        declared, funcs, referenced = parse_idl_file(args.intensity)
-        iPlot = declared.index('plotTitle')
-        moleculeIdl = referenced[iPlot]
-        molecule = idl2mathtext(moleculeIdl)
-    except:
-        iPlot = 0
-
-names = []
-nGood = 0   # count number of found observations
-#devide the files by spaces
-    
-for iObs in range(nObs):
-    # 1. Read the FITS file into an Astropy Table object
-    # The Table.read() method is a high-level interface for reading FITS tables.
-    # prepare to read several observing files
-
-    try:
-        table = Table.read(spectraFiles[iObs], format='fits')
-    except FileNotFoundError:
-        print("Error: The file %s was not found." % (spectraFiles[iObs]))
-        exit()
-    except Exception as e:
-        print(f"Error reading the FITS file: {e}")
-        exit()
-
+obsNames = []
+for iObs in range( nObs):
     # for all spectral data files, abbreviate known Surveys
     if "gotham" in spectraFiles[iObs].lower():
-        names.append("GOTHAM")
+        obsNames.append("GOTHAM")
     else:
         if "tmc-tlq" in spectraFiles[iObs].lower():
-            names.append("TMC-TLQ")
+            obsNames.append("TMC-TLQ")
         else: # deduce survey name from file name
             # else unknow survey, parse file name
             aFile = spectraFiles[iObs]
@@ -177,16 +165,115 @@ for iObs in range(nObs):
             filepart = aparts[nparts-1]
             aparts = filepart.split(".")
             surveyName = aparts[0]
-            names.append(surveyName)
+            obsNames.append(surveyName)
+
+# 0. First read a line list
+# The line list is formated for use in idl.  This list will be converted
+# into a matplotlib friendly array
+
+if args.models == None:
+    print("A model intensity file is needed")
+
+# Muliple models and observation files are supported.
+# First merge all models.
+models = args.models
+if isinstance( models, list):
+    nModels = len( args.models)
+    modelList = args.models
+    model = models[0]
+else:
+    nModels = 1
+    # create a one element list
+    modelList = [args.models]
+    model = models
+
+# get model molecule name from arguements, if provided,
+# else "None"
+molecule = args.molecule
+print("Molecule: %s" % (molecule))
+
+# will merge all model parameters
+allFreqs = []
+allLabels = []
+allWeights = []
+iModel = 0
+# for all models in the list        ax = fig.add_subplot()
+
+print("%d: %s" % (nModels, args.models))
+for aModel in modelList:
+    print("Model: %s" % (aModel))
+    # special case of default model
+    modelNameParts = aModel.split('/')
+    nParts = len(modelNameParts)
+    model = modelNameParts[nParts-1]
+    if model == "hc5n.pro":
+        if molecule == None:
+            molecule = "$HC_5N$"
+        print("Using model default: %s" % (model))
+
+    print("Parsing Model Intensity File (IDL): %s" % (aModel))
+    with open(aModel) as f:
+        text = f.read()
+
+    molecule = getIdlMoleculeName( text)
+
+    # get parameters for this model
+    freqs, labels, weights = extract_idl_arrays(text)
+
+    nFreq = len(freqs)
+    nLabel = len(labels)
+    nWeight = len(weights)
+    print("%3d freqs   1st: %.3f" % (nFreq, freqs[0]))
+    print("%3d labels  1st: %s" %  (nLabel, labels[0]))
+    print("%3d weights 1st: %.3f" % (nWeight, weights[0]))
+    f.close()
+
+    if nFreq < 1:
+        print("No model frequencies found in file: %s" % (aModel))
+        continue
+    
+    allFreqs.append(freqs)
+    allLabels.append(labels)
+    allWeights.append(weights)
+    
+    print("Molecule: %s" % (molecule))
+
+    # end of all models
+
+# now start reading all observations
+names = []
+nGood = 0   # count number of found observations
+
+# initialize giant arrays of bservations
+xs = []
+ys = []
+rmss = []
+    
+for iObs in range(nObs):
+    # 1. Read the FITS file into an Astropy Table object
+    # The Table.read() method is a high-level interface for reading FITS tables.
+    # prepare to read several observing files
+        
+    try:
+        table = Table.read(spectraFiles[iObs], format='fits')
+    except FileNotFoundError:
+        print("Error: The file %s was not found." % (spectraFiles[iObs]))
+        continue
+    except Exception as e:
+        print(f"Error reading the FITS file: {e}")
+        continue
 
     # sanity test, try to find object name
     try:
         print("Object: %s" % (table.meta['OBJECT']))
+        object = table.meta['OBJECT']
     except:
-        print("Object Name not found")
-
+        print("Object Name not found in observing file")
+        object = ""
     print("Survey %2d: File: %s" % (iObs, spectraFiles[iObs]))
 
+    # different observation tables have different column names
+    # try to find frequency and intensity axies in table
     try:
         findex = table.colnames.index("frequency")
         fname  = "frequency"
@@ -273,13 +360,17 @@ if nGood < 1:
 for i, alabel in enumerate( labels):
     labels[i] = idl2mathtext( alabel)
 
+# pass found molecule name
+args.molecule = molecule
+
 if args.title == None:
     if args.plot == 'freq':
-        args.title = "%s Line Strengths %s" % (args.molecule, str(names))
+        args.title = "%s Line Strengths %s" % (molecule, str(obsNames))
     else:
-        args.title = "Stack %s in Velocity %s" % (args.molecule, str(names))
+        args.title = "Stack %s in Velocity %s" % (molecule, str(obsNames))
 
-# finally do all computations
-velocity, intensity = stackSumVelocity( xs, ys, rmss, nObs,
-                                        freqs, weights, labels, args)
+    # finally do sum of all computations
+    Vpeak, Ipeak, Isum, Vfit, Vwidth, IsumRms, VfitRms, VwidthRms = \
+        stackSumVelocity( xs, ys, rmss, nObs, freqs, weights, labels, args)
 
+# if enough information to compute abundances:
