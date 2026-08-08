@@ -50,6 +50,9 @@ def stackArgParse():
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
+    # a positional argument (no dashes) with nargs
+    # Use '+' for 1 or more names, or '*' for 0 or more names
+    parser.add_argument('models', nargs='*', default="pro/hc5n.pro", help='A list of space-separated model names')
 
     # Optional distance to source, for calculation of molecule mass
     parser.add_argument(
