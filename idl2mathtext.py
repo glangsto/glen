@@ -1,5 +1,6 @@
 #python
 #HISTORY
+#26Aug10 GIL put digits in substring in {}
 #26Feb15 GIL coplilot convert idl to matplottext
 
 import re
@@ -13,10 +14,13 @@ def idl2mathtext(label):
     # Replace !Dsub!N with $_sub$
     def repl(match):
         sub = match.group(1)
+        sub = "{%s}" % sub
         return f'$_{sub}$'
 
+    print("IDL :%s" % (label))
     # Convert all !D...!N patterns
     label = re.sub(r'!D(.*?)!N', repl, label)
+    print("Math:%s" % (label))
 
     return label
 
