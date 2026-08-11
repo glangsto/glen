@@ -174,9 +174,10 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
 
     minFreq = min(rest_freqs)
     maxFreq = max(rest_freqs)
+    nFreq = len(rest_freqs)
     dFreq = maxFreq - minFreq
     # set text spaceing for plotting labels of intensity vs frequency
-    dFreqText = dFreq/100.
+    dFreqText = dFreq/(nFreq*10.)
 
     sumSigma2 = 0.
     #total weights of spectra used in sum.
@@ -185,6 +186,7 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
     annotateFont = 16
     axisFont = 18
     axisLabelFont = 20
+    yMin = 1.e9    # start with huge y minimum, and find actual minimum
     
     # now for all rest frequencies, find samples
     for i, (nu_rest, w) in enumerate(zip(rest_freqs, weights)):
@@ -291,8 +293,9 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
                 plt.plot(v_slice, I_slice + plotOffset, lw=2)
                 plt.text(args.vmin + 1., plotOffset + dText,
                          f"{nu_rest:.3f}", fontsize=annotateFont)
+                flabel = "%s:" % str(iObs+1)
                 plt.text(args.vmin, plotOffset + dText,
-                         f"{(iObs+1):d}", fontsize=annotateFont)
+                         flabel, fontsize=annotateFont)
                 plt.text(args.vmax - 3., plotOffset + dText,
                          labels[i], fontsize=annotateFont)
 
@@ -301,6 +304,10 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
 
                 # must give rest of plots some space.
                 yLastMax = max(I_slice)
+                # find the minium in this data set
+                iMin = min(I_slice)
+                # find mimimum in all data sets)
+                yMin = min( yMin, iMin)
                 dOffset = max( offset, yLastMax*.33)
                 plotOffset = plotOffset + dOffset
 
@@ -337,6 +344,11 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
             plt.title("Frequency vs Intensity for %s" % (args.molecule), fontsize=titleFont)
         else:
             plt.title(args.title, fontsize=titleFont)
+        plt.plot( [minFreq,maxFreq],[0.,0.], 'g--', lw=.5)
+        # scale the range to trim x range default
+        dFreq = dFreq / 25.
+        plt.xlim( minFreq-dFreq,maxFreq+dFreq)
+#        plt.ylim(bottom=yMin)
         # finally show result
         plt.tight_layout()
         plt.show() 
@@ -521,7 +533,12 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
     # If just stacking, just need space for last plot
     if args.plot == 'stack':
         peakOffset = yLastMax
-    plt.ylim(bottom=-offset/3.,top=plotOffset+peakOffset)
+        
+    if args.plot == 'both':
+        plt.ylim(bottom=-offset/3.,top=plotOffset+peakOffset+dText)
+    else:
+        plt.ylim(bottom=-offset/3.,top=plotOffset+peakOffset)
+
     plt.tight_layout()
     # finally show result
     plt.show()
