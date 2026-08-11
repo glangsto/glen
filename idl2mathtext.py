@@ -17,10 +17,10 @@ def idl2mathtext(label):
         sub = "{%s}" % sub
         return f'$_{sub}$'
 
-    print("IDL :%s" % (label))
+#    print("IDL :%s" % (label))
     # Convert all !D...!N patterns
     label = re.sub(r'!D(.*?)!N', repl, label)
-    print("Math:%s" % (label))
+#    print("Math:%s" % (label))
 
     return label
 
