@@ -463,9 +463,9 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
         wlabel = ""
         if args.velocity == None:
             vlabel = "Vel: %.3f%s%.3f" % \
-                ("$\pm$", fit_x0, errors[1])
+                (fit_x0, "$\pm$", errors[1])
             wlabel = "Width:%.3f%s%.3f" % \
-                ("$\pm$", fit_sigma, errors[2])
+                (fit_sigma, "$\pm$", errors[2])
             Vpeak = fit_x0
             WidthFit = fit_sigma
             velocity = Vpeak
@@ -485,13 +485,13 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
             else:
                 fit_A = summed[iMin]
                 Vpeak = vel_grid[iMin]
-            plabel = "Peak: %.3f%s%.3f" % ("$\pm$",fit_A, rms)
+            plabel = "Peak: %.3f%s%.3f" % (fit_A, "$\pm$", rms)
             vlabel = "Vel: %.3f" % (Vpeak)
             fitOK = False
         else:        
             print("Max Model Line   : %12.6f   %s (%.3f)" %
                   (usedMaxFreq, usedMaxLabel, usedMaxWeight))
-            plabel = "Peak: %.3f%s%.3f" % ("$\pm$", fit_A, errors[0])
+            plabel = "Peak: %.3f%s%.3f" % (fit_A, "$\pm$", errors[0])
             fitOK = True
 
         plt.axvline(Vpeak, color='blue', linestyle="--", linewidth=1)
