@@ -1,5 +1,6 @@
 #python
 #HISTORY
+#26Aug11 GIL add max plot argument
 #26Aug05 GIL fix default velocity type
 #26May05 GIL Add optional molecule parameters
 #26Apr22 GIL Update minimum offset y axis offset
@@ -139,6 +140,14 @@ def stackArgParse():
         type=str,
         default='both',
         help="Type of plot: one of 'stack', 'sum', 'freq' or 'both'. Default 'both'"
+    )
+
+    # Optional string argument
+    parser.add_argument(
+        "-x", "--maxplot",
+        type=int,
+        default=20,
+        help="Max number of lines to plot and still show line Sum at top of plot. Default 20"
     )
 
     # Optionally report SNR of fit

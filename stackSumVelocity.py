@@ -1,6 +1,8 @@
 #/bin/python
 #Function to stack in velocity the plots and sum the total.
 #HISTORY
+#26Aug11 GIL give up on plotting all lines and the sum, if too may lines
+#26Aug10 GIL fix labels for different plot modes
 #26Aug08 GIL stack multiple model files, clean up fitting plots
 #26Aug05 GIL fix velocity type, clean up argument usage.
 #26Apr26 GIL return all parameters of the fit
@@ -166,7 +168,7 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
     plotOffset = 0.
     # set spacing between plot lines
     offset = args.offset
-    nplot = 0
+    nPlot = 0
     usedMaxWeight = 0.
     usedMaxFreq = 0.
 
@@ -204,13 +206,21 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
 #                print("Not enough samples for frequency %10.3f" % (nu_rest))
                 continue
             
+            # if this line model is a significant contribution to the model.
+            if w > usedMaxWeight:
+                usedMaxWeight = w
+                usedMaxFreq = nu_rest
+                usedMaxLabel = labels[i]
+
             # now update plot label offsets for data ranges
             sliceMax = I_slice.max()
-            topOffset = sliceMax 
-            if nplot == 0:
+            # update the spacing for top text labels
+            dText = offset/5.
+
+            if nPlot == 0:
                 offset = float(args.offset)
                 offset = max(sliceMax,offset)
-                peakMax = max(peakMax, 20.*sliceMax)
+                peakMax = max(peakMax, 7.*sliceMax)
 
             # now if a single maximum is way above other features
             if args.ignore and (sliceMax > peakMax):
@@ -218,10 +228,9 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
                       (nu_rest))
                 continue
 
-            if w > usedMaxWeight:
-                usedMaxWeight = w
-                usedMaxFreq = nu_rest
-                usedMaxLabel = labels[i]
+              # Convert to velocity
+            freq = np.array(freqs[iObs])
+            vel = freq_to_velocity( freq, nu_rest)
 
             # Normalize if requested
             if args.normalize:
@@ -241,7 +250,7 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
                 f_slice = freq[mask]
                 nf = len(f_slice)
                 # these lists are only used to return total intensity vs frequency spectrum
-                if nplot == 0:
+                if nPlot == 0:
                     xs = f_slice.tolist()
                     ys = I_slice.tolist()
                 else:
@@ -253,10 +262,9 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
                 plt.text(f_slice[nf-1]+dFreqText, 0., flabel, rotation=90,
                          fontsize=annotateFont)
                 
-                if args.gauss:
-                    fits, final = iterative_three_gaussian_fit(f_slice, I_slice)
+            if args.gauss:
+                fits, final = iterative_three_gaussian_fit(f_slice, I_slice)
 
-                
             # Interpolate onto uniform velocity grid.
             # interp requires increaseing x axis.   Frequency -> velocity flips
             interp_I = np.interp(vel_grid, np.flip(v_slice), np.flip(I_slice))
@@ -273,56 +281,42 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
             # separately sum the weights used
             weightSum = weightSum + w
             # count plots to deal first update of offset
-            nplot = nplot + 1
+            nPlot = nPlot + 1
 
             print("Obs: %d - Line Weight %6.3f for frequency %10.3f (sigma %.3f)" % \
                   (iObs+1, w, nu_rest, sigma))
 
             if args.plot == 'both' or args.plot == 'stack':
-                textOffset = plotOffset + (offset/4.)
                 # Plot stacked spectrum
                 plt.plot(v_slice, I_slice + plotOffset, lw=2)
-                plt.text(args.vmin + 1., textOffset,
+                plt.text(args.vmin + 1., plotOffset + dText,
                          f"{nu_rest:.3f}", fontsize=annotateFont)
-                plt.text(args.vmin, textOffset,
+                plt.text(args.vmin, plotOffset + dText,
                          f"{(iObs+1):d}", fontsize=annotateFont)
-                plt.text(args.vmax - 3., textOffset,
+                plt.text(args.vmax - 3., plotOffset + dText,
                          labels[i], fontsize=annotateFont)
 
                 if args.gauss:
                     fits, final = iterative_three_gaussian_fit(v_slice, I_slice)
 
                 # must give rest of plots some space.
-                dOffset = max( offset, (max(I_slice)*.33))
+                yLastMax = max(I_slice)
+                dOffset = max( offset, yLastMax*.33)
                 plotOffset = plotOffset + dOffset
 
             # end for all observations
             
         # end for all rest frequencies
         
-    # now normalize weights for strongest line
-    if nplot < 1 or sumSigma2 <= 0.:
-        print("No Lines in Observation Range, Exiting!")
-        print("")
-        exit()
-    summed = summed / sumSigma2
-    if args.plot != 'freq':
-        print("Weight Sum: %.3f.  Sum of weighted sigma squares %.3f" % (weightSum, sumSigma2 ))
-    
-    # create a file name with time and molecule, but without special characters
-    datetime_iso = datetime.now().replace(microsecond=0).isoformat()
-    if args.molecule == None:
-        args.molecule = ""
-    else:
-        args.molecule = str( args.molecule)
-
     if isinstance( args.molecule, str):
         moleculeNoDollar = args.molecule.replace("$","")
     else:
         moleculeNoDollar = ""
     moleculeNoLatex = moleculeNoDollar.replace("{","")
     moleculeNo = moleculeNoLatex.replace("}","")
-    saveFile = "%s-%s.pdf" % (moleculeNo, datetime_iso)
+
+    # create a file name with time and molecule, but without special characters
+    datetime_iso = datetime.now().replace(microsecond=0).isoformat()
 
     # set default values for results
     Vpeak = 0.
@@ -330,46 +324,13 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
     Isum  = 0.
     Vfit = 0.
     Vwidth = 0.
-    IsumRms = 10.
-    VfitRms = 1000.
-    VwidthRms = 1000.
+    Widthfit = 0.
+    SumRms = 0.
+    Vrms = 0.
+    WidthRms = 0.
 
-    textOffset = plotOffset + (offset/3.)
-    topOffset = plotOffset
-    if args.plot == 'both':
-        # now plot average
-        plt.plot(vel_grid, summed + plotOffset, lw=3)
-        # put text above plotted lines
-        plt.text(args.vmax - 3., textOffset,
-                 "Weighted Sum", fontsize=annotateFont)
-
-        # plot the zero line for average
-        plt.plot(vel_grid, (0.00001*summed) + plotOffset, 'g--', lw=.5)
-
-    # if only plotting the sum, there is no offset
-    if args.plot == 'sum':
-        plotOffset = 0.
-        yMax = max(summed)
-        textOffset = (2*yMax + offset)/10.
-        offset = min(5.*yMax, offset)
-        # now plot average
-        plt.plot(vel_grid, summed, lw=3)
-        # put text above plotted lines
-        plt.text(args.vmax - 3., offset/3.,
-                 "Weighted Sum", fontsize=annotateFont)
-        plt.ylabel("Weighted Intensity (K)", fontsize=axisLabelFont)
-        # plot the zero line for average
-        plt.plot(vel_grid, (0.00001*summed) + plotOffset, 'g--', lw=.5)
-        plt.ylim(bottom=min(summed))
-        plt.ylim(top=yMax+offset/3.)
-        if args.title == None:
-            plt.title("Stack in Velocity %s " % (args.molecule), fontsize=titleFont)
-        else:
-            plt.title(args.title, fontsize=titleFont)
-    
-        
+    # if plotting versus frequency, no summing is possible.
     if args.plot == 'freq':
-#        plt.plot(np.array(xs), np.array(ys), lw=3)
         plt.xlabel("Frequency (MHz)", fontsize=axisLabelFont)
         plt.ylabel("Intensity (K)", fontsize=axisLabelFont)
         if args.title == None:
@@ -383,31 +344,90 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
         plt.savefig(saveFile)
         saveFile = "%s-%s.png" % (moleculeNo, datetime_iso)
         plt.savefig(saveFile)
-        return xs, ys
+        # exit, no summing possible
+        return Vpeak, Ipeak, Isum, Vfit, Widthfit, SumRms, Vrms, WidthRms
 
-    if args.plot == 'both':
-        plt.xlim(args.vmin, args.vmax)        
-        plt.xlabel("Velocity (km/s)", fontsize=axisLabelFont)
-        plt.ylabel("Intensity (K) + offset", fontsize=axisLabelFont)
-        # label for top of plot default
-        plt.ylim(bottom=-offset/2.)
+    # now normalize weights for strongest line
+    if nPlot < 1 or sumSigma2 <= 0.:
+        print("No Lines in Observation Range, Exiting!")
+        print("")
+        exit()
+    summed = summed / sumSigma2
+    rms = np.std(summed)
+    # final labels are based on the sum maximum and a few sigma
+    yMax = max(summed)
+    # prepare to calculate y-axis values for text labels
+    peakOffset = max(yMax, 7.*rms, offset)
+    # the text vertical spacing should be 1/25th of total Y value
+    dText = (plotOffset + peakOffset)/24.
+
+    print("Weight Sum: %.3f.  Sum of weighted sigma squares %.3f" % (weightSum, sumSigma2 ))
+    
+    if args.molecule == None:
+        args.molecule = ""
+    else:
+        args.molecule = str( args.molecule)
+
+    saveFile = "%s-%s.pdf" % (moleculeNo, datetime_iso)
+
+    # decided to give up on plotting Sum in case of too many
+    # contributed lines.
+    if nPlot > args.maxplot:
+        # if was plotting both lines and sum
+        if args.plot == 'both':
+            args.plot = 'stack'
+            print("Too many lines to plot the line sum also!")
+            print("Re-run glen.py with argument")
+            print("     --plot sum")
+            print("To view the Sum of all lines")
+
+    # if only plotting the sum, there is no offset
+    if args.plot == 'sum':
+        plotOffset = 0.
+
+    dText = (plotOffset + peakOffset)/24.
+
+    if args.plot == 'both' or args.plot == 'sum':
+        # now plot average
+        plt.plot(vel_grid, summed + plotOffset, lw=3)
+        # put text above plotted lines
+        plt.text(args.vmax - 3., plotOffset + dText,
+                 "Weighted Sum", fontsize=annotateFont)
+
+        # plot the zero line for average
+        plt.plot(vel_grid, (0.00001*summed) + plotOffset, 'g--', lw=.5)
+
+        plt.ylabel("Weighted Intensity (K)", fontsize=axisLabelFont)
+        # plot the zero line for average
+        
         if args.title == None:
             plt.title("Stack in Velocity %s " % (args.molecule), fontsize=titleFont)
         else:
             plt.title(args.title, fontsize=titleFont)
+    
+    plt.xlim(args.vmin, args.vmax)        
+    plt.xlabel("Velocity (km/s)", fontsize=axisLabelFont)
+    plt.ylabel("Intensity (K) + offset", fontsize=axisLabelFont)
+    # label for top of plot default
+    plt.ylim(bottom=-offset/2.)
+    
+    if args.title == None:
+        plt.title("Stack in Velocity %s " % (args.molecule), fontsize=titleFont)
+    else:
+        plt.title(args.title, fontsize=titleFont)
     
         
     # Now fit a gaussian to the sum
     sumMax = summed.max()
     iMax = summed.argmax()
     velMax = vel_grid[iMax]
-    rms = np.std(summed)
 
     Widthfit = 0.
     SumRms = 0.
     Vrms = 0.
     WidthRms = 0.
     vrange = args.vmax - args.vmin
+
     # initial guess is at max location, with 1/20th toe velocity rangea
     initial_guess = [ sumMax, velMax, ((vrange)*.05)]
     # set default search velocity
@@ -443,7 +463,7 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
             velocity = Vpeak
 
         # sanity check on fit.  If peak is a small sigma, just use max.
-        if fit_A < 3. * rms:
+        if fit_A < 2.5 * rms:
             print( "Peak fit is not significant, reporting max instead")
             iMax = np.argmax( summed)
             iMin = np.argmin( summed)
@@ -464,28 +484,26 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
 
         plt.axvline(Vpeak, color='blue', linestyle="--", linewidth=1)
 
+        topMax = max( 7.*rms, sumMax, offset)
+        dText = (plotOffset+topMax)/24.
         # trying to place sum labels in correct locations.
         if args.plot == 'sum':
-            plotOffset = offset
-            topOffset = 0.
-            dText = (3*sumMax + offset)/20.
-        else:
-            dText = sumMax/5. + (offset/5.)
+            plotOffset = 0.
 
         # need to estimate the Y axis range to put text in correct spot
         if args.plot == 'both' or args.plot == 'sum':
             Vtext = Vpeak - (vrange*.45)
             if Vtext < args.vmin:
                 Vtext = args.vmin + (vrange*.1)
-            plt.text(Vtext, topOffset+2.*dText,
+            plt.text(Vtext, plotOffset+1.*dText,
                      vlabel, fontsize=annotateFont)
-            plt.text(Vtext, topOffset+1.*dText,
+            plt.text(Vtext, plotOffset+2.*dText,
                      wlabel, fontsize=annotateFont)
 
-            plt.text(Vtext, topOffset+3.*dText,
+            plt.text(Vtext, plotOffset+3.*dText,
                      plabel, fontsize=annotateFont)
             if fitOK:
-                plt.plot(vel_grid, gaussian(vel_grid, *popt)+topOffset, 'r--')
+                plt.plot(vel_grid, gaussian(vel_grid, *popt)+plotOffset, 'r--')
             # now do not double plot velocity
         Vpeak = None
         
@@ -496,14 +514,16 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
         Vpeak = float(args.velocity)
         vlabel = "Vel: %.2f" % (Vpeak)
         plt.axvline(velocity, color='blue', linestyle="--", linewidth=1)
-        plt.text(velocity-(vrange*.4), plotOffset+sumMax-(2.*offset),
+        plt.text(velocity-(vrange*.4), plotOffset+sumMax-dText,
                  vlabel, fontsize=annotateFont)
     else:
        Vpeak = 0.0
-    # finally show result
-    if args.plot != 'sum':
-        plt.ylim(bottom=-offset/2.,top=plotOffset+sumMax+offset)
+    # If just stacking, just need space for last plot
+    if args.plot == 'stack':
+        peakOffset = yLastMax
+    plt.ylim(bottom=-offset/3.,top=plotOffset+peakOffset)
     plt.tight_layout()
+    # finally show result
     plt.show()
 
     saveFile = "%s-%s.pdf" % (moleculeNo, datetime_iso)
@@ -515,7 +535,7 @@ def stackSumVelocity( freqs, intensitys, rmss, nObs, rest_freqs, weights, labels
     if args.report_snr:
         rms_individual = np.mean(individual_rms)
         rms_sum = np.std(summed)
-        theoretical_gain = np.sqrt(nplot)
+        theoretical_gain = np.sqrt(nPlot)
         measured_gain = rms_individual / rms_sum if rms_sum > 0 else np.inf
         rms1 = np.std(summed[0:100])
         rms2 = np.std(summed[(nSum-100):(nSum-1)])

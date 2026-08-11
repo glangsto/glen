@@ -128,7 +128,7 @@ def getIdlMoleculeName( text):
             print("Did not find plotTitle in idl file")
         print("Looking for molecule Name: %s" % (moleculeIdl))
         inMolecule = idl2mathtext(moleculeIdl)
-        print("Looking for molecule Name: %s" % (inMolecule))
+        print("Found   a   molecule Name: %s" % (inMolecule))
         molecule = inMolecule
     except:
         print("Did not find molecule name in Model file: %s" % (aModel))
@@ -153,10 +153,12 @@ obsNames = []
 for iObs in range( nObs):
     # for all spectral data files, abbreviate known Surveys
     if "gotham" in spectraFiles[iObs].lower():
-        obsNames.append("GOTHAM")
+        addName = "%s:GOTHAM" % str(iObs+1)
+        obsNames.append(addName)
     else:
         if "tmc-tlq" in spectraFiles[iObs].lower():
-            obsNames.append("TMC-TLQ")
+            addName = "%s:TMC-TLQ" % str(iObs+1)
+            obsNames.append(addName)
         else: # deduce survey name from file name
             # else unknow survey, parse file name
             aFile = spectraFiles[iObs]
@@ -165,6 +167,7 @@ for iObs in range( nObs):
             filepart = aparts[nparts-1]
             aparts = filepart.split(".")
             surveyName = aparts[0]
+            surveyName = "%s:%s" % (str(iObs+1),surveyName)
             obsNames.append(surveyName)
 
 # 0. First read a line list
